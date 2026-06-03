@@ -44,8 +44,6 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 GEMINI_FALLBACK = os.getenv("GEMINI_FALLBACK", "gemini-2.5-flash-lite")
 
-NOTIFIER = (os.getenv("NOTIFIER") or "ntfy").strip().lower()
-
 # All stored fields: label, unit, good direction, short hint for Gemini.
 FIELD_META: dict[str, dict[str, str]] = {
     "steps": {

@@ -2,7 +2,7 @@
 
 **Free daily AI brief on your Garmin data — Gemini reads your full history, push to your phone. $0 to run.**
 
-Fully automated pipeline: pull Garmin Connect into SQLite, send formatted daily history to Gemini for analysis, and deliver a short coached brief via ntfy, Telegram, or email. Runs on GitHub Actions; no server to maintain.
+Fully automated pipeline: pull Garmin Connect into SQLite, send formatted daily history to Gemini for analysis, and deliver a short coached brief via ntfy. Runs on GitHub Actions; no server to maintain.
 
 
 
@@ -26,7 +26,7 @@ In bed 30 minutes earlier tonight.
 Poor sleep raises cortisol and daily stress.
 ```
 
-**Cost:** $0 (Garmin via `garminconnect`, Gemini free tier, GitHub Actions, ntfy/Telegram/email).
+**Cost:** $0 (Garmin via `garminconnect`, Gemini free tier, GitHub Actions, ntfy).
 
 ## Setup
 
@@ -80,19 +80,12 @@ rm -f tokens.tar
 | ------------------------------------------------ | ----------------------------------------------- |
 | `GARMIN_TOKENS_B64`                              | base64 tar of `~/.garminconnect`                |
 | `GEMINI_API_KEY`                                 | [Google AI Studio](https://aistudio.google.com) |
-| `NOTIFIER`                                       | `ntfy` (default), `telegram`, or `email`        |
-| `NTFY_TOPIC`                                     | long random topic (ntfy)                        |
-| `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID`        | Telegram                                        |
-| `EMAIL_USER` / `EMAIL_APP_PASSWORD` / `EMAIL_TO` | Gmail app password                              |
+| `NTFY_TOPIC`     | long random topic (ntfy)                        |
 
 
-### 5. Notifier
+### 5. ntfy
 
-**ntfy (default):** Install the [ntfy app](https://ntfy.sh), subscribe to a long random topic, set `NTFY_TOPIC`.
-
-**Telegram:** Create a bot via @BotFather, get your chat id.
-
-**Email:** Gmail app password (not account password).
+Install the [ntfy app](https://ntfy.sh), subscribe to a long random topic, set `NTFY_TOPIC` in `.env` and GitHub secrets.
 
 ### 6. Test locally
 

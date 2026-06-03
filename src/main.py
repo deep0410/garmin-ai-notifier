@@ -8,7 +8,6 @@ import sys
 from src import db
 from src import features
 from src import insight
-from src import config
 from src import notify
 from src import pull
 
@@ -39,7 +38,7 @@ def main() -> int:
     brief = insight.generate(digest)
     print(brief)
     notify.send("Daily Garmin Brief", brief)
-    logger.info("Notification sent via %s", config.NOTIFIER)
+    logger.info("Notification sent via ntfy")
     return 0
 
 
