@@ -1,0 +1,48 @@
+name: garmin-daily
+
+on:
+  schedule:
+    - cron: "0 13 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install -r requirements.txt
+
+      - name: Restore Garmin token
+        run: |
+          mkdir -p ~/.garminconnect
+          echo "${{ secrets.GARMIN_TOKENS_B64 }}" | base64 -d > tokens.tar
+          tar -xf tokens.tar -C ~/.garminconnect
+          rm -f tokens.tar
+
+      - name: Run daily brief
+        env:
+          NOTIFIER: ${{ secrets.NOTIFIER }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_APP_PASSWORD: ${{ secrets.EMAIL_APP_PASSWORD }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+        run: python -m src.main
+
+      - name: Persist data
+        run: |
+          git config user.name "garmin-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add garmin.db
+          git commit -m "data $(date -I)" || echo "no changes"
+          git push

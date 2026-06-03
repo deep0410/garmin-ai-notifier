@@ -1,0 +1,118 @@
+# Garmin Daily AI Insights
+
+Fully automated daily pipeline: pull Garmin Connect data into SQLite, compute full-history statistics, generate a short Gemini brief, and push it to your phone.
+
+**Cost:** $0 (Garmin API via `garminconnect`, Gemini free tier, GitHub Actions, ntfy/Telegram/email).
+
+## Setup
+
+### 1. Python environment
+
+```bash
+python3.12 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+### 2. Mint Garmin token (local, once)
+
+```bash
+python scripts/mint_token.py
+```
+
+Use your Garmin email, password, and MFA code. Tokens are saved to `~/.garminconnect` (valid ~1 year).
+
+### 3. Backfill history
+
+```bash
+BACKFILL_DAYS=400 python -m src.backfill
+```
+
+Creates `garmin.db`. Commit it to your repo after backfill completes (re-run backfill after schema changes to drop old `raw` data and fill new columns).
+
+### 4. GitHub Actions secrets
+
+Package tokens for CI:
+
+```bash
+tar -cf tokens.tar -C ~/.garminconnect .
+base64 -i tokens.tar | tr -d '\n'   # macOS
+# Linux: base64 -w0 tokens.tar
+```
+
+Paste into secret `GARMIN_TOKENS_B64`, then delete `tokens.tar`.
+
+| Secret | Purpose |
+|--------|---------|
+| `GARMIN_TOKENS_B64` | base64 tar of `~/.garminconnect` |
+| `GEMINI_API_KEY` | [Google AI Studio](https://aistudio.google.com) |
+| `NOTIFIER` | `ntfy` (default), `telegram`, or `email` |
+| `NTFY_TOPIC` | long random topic (ntfy) |
+| `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | Telegram |
+| `EMAIL_USER` / `EMAIL_APP_PASSWORD` / `EMAIL_TO` | Gmail app password |
+
+### 5. Notifier
+
+**ntfy (default):** Install the ntfy app, subscribe to a long random topic, set `NTFY_TOPIC`.
+
+**Telegram:** Create a bot via @BotFather, get your chat id.
+
+**Email:** Gmail app password (not account password).
+
+### 6. Test locally
+
+```bash
+cp .env.example .env   # fill in secrets
+NOTIFIER=ntfy python -m src.main
+```
+
+### 7. Deploy
+
+Create a GitHub repo, commit everything including `garmin.db`, add secrets, run **workflow_dispatch** on `garmin-daily` once to verify CI. The repo can be **public** if you accept that `garmin.db` exposes daily health numbers (see below).
+
+## What goes in `garmin.db` (public-safe design)
+
+Only **scalar daily wellness metrics** are stored. There is **no `raw` JSON**, no GPS, no activity routes, no maps, and no activity list/workout details.
+
+| Stored | Not stored |
+|--------|------------|
+| Steps, resting HR, sleep (duration/score/stages), stress, Body Battery high/low, HRV, training readiness, intensity minutes, active kcal | Location, lat/long, track polyline |
+| SpO2, VO2 max, Garmin **fitness age**, weight (g), body fat % | Activity names, routes, timestamps per lap |
+| Date (`YYYY-MM-DD`) only | Full API responses, heart-rate streams |
+
+**Fitness age** is Garmin’s estimated fitness age (a single number), not your birthdate or home address.
+
+If you already backfilled with an older version that wrote `raw`, run `BACKFILL_DAYS=400 python -m src.backfill` again to refresh rows without raw blobs.
+
+## Daily run
+
+`python -m src.main` — pull recent days → digest → Gemini brief → notification.
+
+GitHub Actions runs at **13:00 UTC** (~8am US Eastern), commits updated `garmin.db`, and pushes.
+
+## Gotchas
+
+- **Cron drift:** Scheduled runs may start a few minutes late; fine for a daily brief.
+- **Workflow auto-disable:** Repos with no commits for 60 days disable scheduled workflows. Committing `garmin.db` each run prevents this.
+- **Token expiry:** Re-run `scripts/mint_token.py` when Actions fail auth (~yearly).
+- **Gemini privacy:** Free tier may use inputs for training. The digest contains only aggregated numbers — no names or emails.
+- **Rate limits:** One Gemini call/day; flash → flash-lite fallback on 429.
+- **Thin data:** Metrics with fewer than 14 days skip percentile/record claims.
+- **NULL:** Missing Garmin fields are stored as NULL, never zero.
+- **Gemini quota 0:** If you see `limit: 0` 429 errors, link a billing account on the GCP project tied to your API key (still $0 for one call/day within free tier).
+
+## Project layout
+
+```
+src/
+  config.py       # env, metrics registry, goals
+  db.py           # SQLite
+  garmin_client.py
+  pull.py / backfill.py
+  features.py     # statistics digest
+  insight.py      # Gemini brief
+  notify.py
+  main.py
+scripts/mint_token.py
+.github/workflows/daily.yml
+```
