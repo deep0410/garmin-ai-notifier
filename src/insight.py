@@ -19,16 +19,29 @@ do NOT recompute or invent numbers; only use what's provided).
 DIGEST:
 {digest_json}
 
-Write a daily brief as a phone notification. Rules:
-- 60–100 words, plain text, no markdown headers, at most one emoji and only if it earns its place.
-- Do NOT list every metric. Choose the 2–3 MOST meaningful signals from top_signals and the
-  digest, and explain why they matter using THIS person's own history (percentiles, trends,
-  streaks, correlations) — e.g. "your resting HR hit a 90-day low, and it follows three nights
-  back in your sleep target band."
+Write a daily brief for a phone notification. Rules:
+- 60–100 words total. Be specific; use only numbers from the digest.
 - Respect good_direction: never frame a worsening metric as positive.
-- Include exactly one concrete, specific action for today that follows from the data.
-- End with one short, genuinely interesting physiology/training fact tied to a metric you mentioned.
-- Be specific and human. No platitudes, no "keep it up!", no generic wellness filler.
+- Pick 2–3 meaningful signals (percentiles, trends, streaks, records) — not every metric.
+- No platitudes or generic wellness filler. At most one emoji, only if it earns its place.
+
+FORMAT — follow this layout exactly (blank line between each section):
+
+WATCH
+• <concern 1: metric + number + vs your history, one line>
+• <optional concern 2, one line>
+
+WINS
+• <bright spot 1, one line>
+• <optional bright spot 2, one line>
+
+TODAY
+<one concrete imperative sentence — what to do today>
+
+—
+<one short physiology/training fact tied to a metric above>
+
+Use "•" bullets only under WATCH and WINS. Keep each bullet under ~90 characters. Do not write a single paragraph.
 """
 
 
@@ -36,6 +49,30 @@ def build_prompt(digest: dict) -> str:
     return PROMPT_TEMPLATE.format(
         digest_json=json.dumps(digest, indent=2, default=str)
     )
+
+
+def format_brief(text: str) -> str:
+    """Normalize spacing so ntfy/Telegram show clear sections."""
+    lines = [ln.strip() for ln in text.strip().splitlines()]
+    out: list[str] = []
+    for ln in lines:
+        if not ln:
+            if out and out[-1] != "":
+                out.append("")
+            continue
+        if out and out[-1] != "":
+            prev = out[-1]
+            if prev in ("WATCH", "WINS") and not ln.startswith("•"):
+                out.append(f"• {ln}")
+                continue
+            if prev == "—" or ln == "—":
+                out.append(ln)
+                continue
+        out.append(ln)
+    formatted = "\n".join(out).strip()
+    while "\n\n\n" in formatted:
+        formatted = formatted.replace("\n\n\n", "\n\n")
+    return formatted
 
 
 def _extract_text(response: object) -> str:
@@ -79,7 +116,7 @@ def generate(digest: dict) -> str:
             text = _extract_text(response)
             if not text:
                 raise RuntimeError(f"Empty response from {model}")
-            return text
+            return format_brief(text)
         except Exception as err:
             last_err = err
             logger.warning("Gemini %s failed: %s", model, err)

@@ -5,6 +5,23 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+_ROOT = Path(__file__).resolve().parent.parent
+_ENV_FILE = _ROOT / ".env"
+
+
+def _load_dotenv() -> None:
+    if not _ENV_FILE.is_file():
+        return
+    try:
+        from dotenv import load_dotenv
+
+        load_dotenv(_ENV_FILE)
+    except ImportError:
+        pass
+
+
+_load_dotenv()
+
 DB_PATH = os.getenv("DB_PATH", "garmin.db")
 GARMIN_TOKENSTORE = os.path.expanduser(
     os.getenv("GARMINTOKENS", "~/.garminconnect")
@@ -75,7 +92,7 @@ DAILY_COLUMNS = [
 
 
 def project_root() -> Path:
-    return Path(__file__).resolve().parent.parent
+    return _ROOT
 
 
 def db_path() -> Path:
