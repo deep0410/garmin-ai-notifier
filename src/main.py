@@ -30,7 +30,11 @@ def main() -> int:
         return 1
 
     digest = features.build_digest(rows)
-    logger.info("Digest as_of=%s signals=%d", digest["as_of"], len(digest["top_signals"]))
+    logger.info(
+        "Digest reference_day=%s days=%d",
+        digest["reference_day"],
+        digest["day_count"],
+    )
 
     brief = insight.generate(digest)
     print(brief)

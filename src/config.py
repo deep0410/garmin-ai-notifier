@@ -44,29 +44,7 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 GEMINI_FALLBACK = os.getenv("GEMINI_FALLBACK", "gemini-2.5-flash-lite")
 
-NOTIFIER = os.getenv("NOTIFIER", "ntfy").lower()
-
-MIN_HISTORY_DAYS = 14
-
-METRICS: dict[str, dict[str, str]] = {
-    "steps": {"label": "Steps", "unit": "", "good": "up"},
-    "resting_hr": {"label": "Resting HR", "unit": "bpm", "good": "down"},
-    "sleep_seconds": {"label": "Sleep", "unit": "h", "good": "target"},
-    "sleep_score": {"label": "Sleep score", "unit": "", "good": "up"},
-    "stress_avg": {"label": "Avg stress", "unit": "", "good": "down"},
-    "body_battery_high": {"label": "Body Battery peak", "unit": "", "good": "up"},
-    "hrv_avg": {"label": "HRV", "unit": "ms", "good": "up"},
-    "training_readiness": {
-        "label": "Training readiness",
-        "unit": "",
-        "good": "up",
-    },
-    "intensity_minutes": {"label": "Intensity minutes", "unit": "min", "good": "up"},
-    "spo2_avg": {"label": "SpO2", "unit": "%", "good": "up"},
-    "vo2_max": {"label": "VO2 max", "unit": "ml/kg/min", "good": "up"},
-    "fitness_age": {"label": "Fitness age", "unit": "yr", "good": "down"},
-    "body_fat_percent": {"label": "Body fat", "unit": "%", "good": "down"},
-}
+NOTIFIER = (os.getenv("NOTIFIER") or "ntfy").strip().lower()
 
 # All stored fields: label, unit, good direction, short hint for Gemini.
 FIELD_META: dict[str, dict[str, str]] = {
@@ -179,8 +157,6 @@ FIELD_META: dict[str, dict[str, str]] = {
         "hint": "Garmin fitness age estimate; lower vs chronological age is better.",
     },
 }
-
-PASS_THROUGH_KEYS = [k for k in FIELD_META if k not in METRICS]
 
 DAILY_COLUMNS = [
     "day",

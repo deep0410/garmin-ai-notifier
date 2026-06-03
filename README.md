@@ -1,8 +1,8 @@
 # Garmin Daily AI Insights
 
-**Free daily AI brief on your Garmin data — full-history stats, Gemini insight, push to your phone. $0 to run.**
+**Free daily AI brief on your Garmin data — Gemini reads your full history, push to your phone. $0 to run.**
 
-Fully automated pipeline: pull Garmin Connect into SQLite, compute percentiles and trends over your whole history, and deliver a short coached brief via ntfy, Telegram, or email. Runs on GitHub Actions; no server to maintain.
+Fully automated pipeline: pull Garmin Connect into SQLite, send formatted daily history to Gemini for analysis, and deliver a short coached brief via ntfy, Telegram, or email. Runs on GitHub Actions; no server to maintain.
 
 
 
@@ -121,7 +121,7 @@ Only **scalar daily wellness metrics** are stored. There is **no `raw` JSON**, n
 
 ## Daily run
 
-`python -m src.main` — pull recent days → digest → Gemini brief → notification.
+`python -m src.main` — pull recent days → format full history → Gemini brief → notification.
 
 GitHub Actions runs at **11:00 UTC** (~7:00 AM US Eastern in EDT; ~6:00 AM in EST), commits updated `garmin.db`, and pushes.
 
@@ -132,8 +132,8 @@ GitHub Actions runs at **11:00 UTC** (~7:00 AM US Eastern in EDT; ~6:00 AM in ES
 - **Token expiry:** Re-run `scripts/mint_token.py` when Actions fail auth (~yearly).
 - **Gemini privacy:** Free tier may use inputs for training. The digest contains only aggregated numbers — no names or emails.
 - **Rate limits:** One Gemini call/day; flash → flash-lite fallback on 429.
-- **Thin data:** Metrics with fewer than 14 days skip percentile/record claims.
 - **NULL:** Missing Garmin fields are stored as NULL, never zero.
+- **Gemini math:** All trends/comparisons are interpreted by the model from `daily_history` — verify numbers in the brief match the data if something looks off.
 - **Gemini quota 0:** If you see `limit: 0` 429 errors, link a billing account on the GCP project tied to your API key (still $0 for one call/day within free tier).
 
 ## Project layout
@@ -144,7 +144,7 @@ src/
   db.py           # SQLite
   garmin_client.py
   pull.py / backfill.py
-  features.py     # statistics digest
+  features.py     # format history for Gemini (no local stats)
   insight.py      # Gemini brief
   notify.py
   main.py

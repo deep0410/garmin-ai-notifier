@@ -1,4 +1,4 @@
-"""Gemini daily brief from precomputed digest."""
+"""Gemini daily brief from formatted Garmin history."""
 
 from __future__ import annotations
 
@@ -12,31 +12,30 @@ from src import config
 
 logger = logging.getLogger(__name__)
 
-PROMPT_TEMPLATE = """You are a sharp, no-nonsense performance coach reading one person's Garmin data.
+PROMPT_TEMPLATE = """You are a sharp, no-nonsense performance coach reading one person's Garmin wellness data.
 
-You receive a JSON digest with these sections:
-- metrics: precomputed history stats (percentiles, z-scores, trends, streaks, records). Do NOT recalculate these.
-- pass_through: metrics WITHOUT precomputed stats — use reference_day and last_7d only; each has label, unit, good_direction, hint.
-- yesterday_snapshot: all reference-day values (human-readable labels).
-- last_7d: last 7 calendar days of compact daily values for context.
-- top_signals: ranked highlights — start here if non-empty.
-- correlations: cross-metric patterns.
+You receive JSON with:
+- reference_day: the date the daily brief is about (usually yesterday).
+- goals: step target and sleep hour band.
+- metrics_guide: what each metric means and good_direction ("up", "down", or "target" for sleep band).
+- daily_history: every stored day, oldest to newest, with human-readable metric labels.
 
-Reference day is digest.as_of. Respect good_direction everywhere (e.g. lower resting HR and stress are good; higher is bad unless good_direction is up).
+Your job: analyze the full history yourself — trends, highs/lows, vs goals, vs recent weeks.
+Use ONLY numbers that appear in daily_history. Never invent values.
+Respect good_direction (e.g. lower resting HR and stress are good; higher steps and HRV are good).
 
 DIGEST:
 {digest_json}
 
 Write a phone notification brief. Rules:
-- 60–100 words. Use ONLY numbers from the digest; never invent values.
-- Pick 2–3 meaningful points (mix metrics stats, pass_through trends, and last_7d if useful).
-- You may cite pass_through metrics (deep sleep, REM, Body Battery low, active kcal, weight) when relevant.
+- 60–100 words.
+- Pick the 2–3 most meaningful signals for reference_day using the person's own history.
 - No platitudes. At most one emoji if earned.
 
 FORMAT — blank line between sections:
 
 WATCH
-• <concern: metric + number + vs history or 7d context>
+• <concern: metric + number + why it matters vs their history>
 • <optional second concern>
 
 WINS
@@ -60,7 +59,6 @@ def build_prompt(digest: dict) -> str:
 
 
 def format_brief(text: str) -> str:
-    """Normalize spacing so ntfy/Telegram show clear sections."""
     lines = [ln.strip() for ln in text.strip().splitlines()]
     out: list[str] = []
     for ln in lines:
@@ -72,9 +70,6 @@ def format_brief(text: str) -> str:
             prev = out[-1]
             if prev in ("WATCH", "WINS") and not ln.startswith("•"):
                 out.append(f"• {ln}")
-                continue
-            if prev == "—" or ln == "—":
-                out.append(ln)
                 continue
         out.append(ln)
     formatted = "\n".join(out).strip()
@@ -92,8 +87,7 @@ def _extract_text(response: object) -> str:
         content = getattr(cand, "content", None)
         if not content:
             continue
-        parts = getattr(content, "parts", None) or []
-        for part in parts:
+        for part in getattr(content, "parts", None) or []:
             t = getattr(part, "text", None)
             if t:
                 return str(t).strip()
@@ -102,8 +96,7 @@ def _extract_text(response: object) -> str:
 
 def _is_rate_limit(err: Exception) -> bool:
     if isinstance(err, genai_errors.ClientError):
-        code = getattr(err, "code", None)
-        if code == 429:
+        if getattr(err, "code", None) == 429:
             return True
     msg = str(err).lower()
     return "429" in msg or "rate" in msg or "quota" in msg or "resource_exhausted" in msg
