@@ -59,12 +59,21 @@ Creates `garmin.db`. Commit it to your repo after backfill completes (re-run bac
 Package tokens for CI:
 
 ```bash
-tar -cf tokens.tar -C ~/.garminconnect .
-base64 -i tokens.tar | tr -d '\n'   # macOS
-# Linux: base64 -w0 tokens.tar
+bash scripts/pack_tokens.sh
 ```
 
-Paste into secret `GARMIN_TOKENS_B64`, then delete `tokens.tar`.
+Copy the **single long line** of output into repository secret `GARMIN_TOKENS_B64` (no quotes, no spaces, no line breaks in the secret value).
+
+If Actions fails with `base64: invalid input`, the secret was pasted wrong — re-run `pack_tokens.sh` and replace the secret entirely.
+
+Manual alternative:
+
+```bash
+tar -cf tokens.tar -C ~/.garminconnect .
+base64 < tokens.tar | tr -d '\n\r '
+# paste that one line into GARMIN_TOKENS_B64
+rm -f tokens.tar
+```
 
 
 | Secret                                           | Purpose                                         |

@@ -21,11 +21,24 @@ jobs:
       - run: pip install -r requirements.txt
 
       - name: Restore Garmin token
+        env:
+          GARMIN_TOKENS_B64: ${{ secrets.GARMIN_TOKENS_B64 }}
         run: |
+          set -euo pipefail
           mkdir -p ~/.garminconnect
-          echo "${{ secrets.GARMIN_TOKENS_B64 }}" | base64 -d > tokens.tar
+          if [ -z "${GARMIN_TOKENS_B64}" ]; then
+            echo "GARMIN_TOKENS_B64 secret is empty" >&2
+            exit 1
+          fi
+          printf '%s' "$GARMIN_TOKENS_B64" | tr -d '\n\r\t ' | base64 -d > tokens.tar
+          tar -tf tokens.tar >/dev/null
           tar -xf tokens.tar -C ~/.garminconnect
           rm -f tokens.tar
+          if [ ! -f ~/.garminconnect/garmin_tokens.json ]; then
+            echo "Token file missing after extract — re-run scripts/pack_tokens.sh locally" >&2
+            ls -la ~/.garminconnect >&2 || true
+            exit 1
+          fi
 
       - name: Run daily brief
         env:
