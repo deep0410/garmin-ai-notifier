@@ -2,7 +2,7 @@
 
 **Free daily AI brief on your Garmin data — Gemini reads your full history, push to your phone. $0 to run.**
 
-Fully automated pipeline: pull Garmin Connect into SQLite, send formatted daily history to Gemini for analysis, and deliver a short coached brief via ntfy. Runs on GitHub Actions; no server to maintain.
+Fully automated pipeline: pull Garmin Connect into SQLite, send formatted daily history to Gemini for analysis, and deliver a short coached brief via ntfy. The job runs on GitHub Actions when triggered; **daily timing uses a free external cron** ([crontab.guru](https://crontab.guru/) + [cron-job.org](https://cron-job.org/en/)), not GitHub’s built-in schedule (unreliable).
 
 
 
@@ -96,7 +96,36 @@ python -m src.main
 
 ### 7. Deploy
 
-Create a GitHub repo, commit everything including `garmin.db`, add secrets, run **workflow_dispatch** on `garmin-daily` once to verify CI. The repo can be **public** if you accept that `garmin.db` exposes daily health numbers (see below).
+Create a GitHub repo, commit everything including `garmin.db`, add secrets, run **Actions → garmin-daily → Run workflow** once to verify CI. The repo can be **public** if you accept that `garmin.db` exposes daily health numbers (see below).
+
+### 8. Daily schedule (crontab.guru + cron-job.org)
+
+**Do not use GitHub Actions `on.schedule`.** Scheduled workflows on GitHub are often delayed, skipped, or never registered after cron edits. Use a free external cron instead.
+
+1. **Pick a time** — e.g. 1:05 PM Eastern. Open [crontab.guru](https://crontab.guru/) and build a standard 5-field cron for your runner’s timezone.  
+   - Example for **1:05 PM in `America/New_York` on the cron host**: many users use UTC on [cron-job.org](https://cron-job.org/en/) → `5 17 * * *` (17:05 UTC ≈ 1:05 PM EDT; adjust in winter or when DST changes). crontab.guru shows what each field means as you edit.
+
+2. **Create a GitHub PAT** (fine-grained or classic) with **`actions:write`** and **`contents: read`** on this repo. Copy it once; you will paste it into cron-job.org, not into GitHub secrets.
+
+3. **Create a cron job** at [cron-job.org](https://cron-job.org/en/) (free account):
+   - **URL:** `https://api.github.com/repos/YOUR_USER/YOUR_REPO/actions/workflows/daily.yml/dispatches`
+   - **Method:** `POST`
+   - **Schedule:** the expression from step 1 (cron-job.org has a UI; cross-check on crontab.guru)
+   - **Headers:**
+     - `Accept: application/vnd.github+json`
+     - `Authorization: Bearer YOUR_GITHUB_PAT`
+     - `Content-Type: application/json`
+   - **Body:** `{"ref":"main"}`
+
+4. **Test:** Run the job once from cron-job.org; confirm a **workflow_dispatch** run appears under Actions and you get the ntfy brief.
+
+**Alternative — run on your Mac (no Actions):** use the same expression in local `crontab -e` (built with crontab.guru):
+
+```bash
+5 13 * * * cd /path/to/garmin && .venv/bin/python -m src.main >> /tmp/garmin-cron.log 2>&1
+```
+
+Set `TZ=America/New_York` in the crontab line or in your shell profile if you want local Eastern time. You must commit `garmin.db` yourself if you want it in the repo.
 
 ## What goes in `garmin.db` (public-safe design)
 
@@ -116,13 +145,12 @@ Only **scalar daily wellness metrics** are stored. There is **no `raw` JSON**, n
 
 `python -m src.main` — pull recent days → format full history → Gemini brief → notification.
 
-GitHub Actions runs daily at **1:05 PM US Eastern** (`America/New_York`, DST-aware), commits updated `garmin.db`, and pushes.
+When triggered via cron-job.org, GitHub Actions runs the same command, commits updated `garmin.db`, and pushes.
 
 ## Gotchas
 
-- **Schedule not firing:** Cron only runs from the workflow on `main`. Changing the cron many times in one day can skip runs; after editing, wait until the next slot or use **Actions → garmin-daily → Run workflow**. Confirm the workflow is **enabled** (not disabled in the Actions tab). Scheduled runs can lag a few minutes; they never appeared in history until the cron stays stable on `main`.
-- **Cron drift:** Scheduled runs may start a few minutes late; fine for a daily brief.
-- **Workflow auto-disable:** Repos with no commits for 60 days disable scheduled workflows. Committing `garmin.db` each run prevents this.
+- **GitHub `on.schedule`:** Intentionally not used — use [crontab.guru](https://crontab.guru/) + [cron-job.org](https://cron-job.org/en/) instead (see §8).
+- **cron-job.org 4xx:** PAT needs `actions:write`; URL must match `daily.yml` on `main`; body must be `{"ref":"main"}`.
 - **Token expiry:** Re-run `scripts/mint_token.py` when Actions fail auth (~yearly).
 - **Gemini privacy:** Free tier may use inputs for training. The digest contains only aggregated numbers — no names or emails.
 - **Rate limits:** One Gemini call/day; flash → flash-lite fallback on 429.

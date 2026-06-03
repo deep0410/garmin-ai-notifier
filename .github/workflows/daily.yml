@@ -1,10 +1,9 @@
+# Triggered by workflow_dispatch only (manual or external cron).
+# Do not use GitHub's on.schedule — it is unreliable. See README: crontab.guru + cron-job.org.
+
 name: garmin-daily
 
 on:
-  schedule:
-    # 1:05 PM America/New_York (DST-aware). Minute 5 avoids top-of-hour queue drops.
-    - cron: "16 14 * * *"
-      timezone: America/New_York
   workflow_dispatch: {}
 
 permissions:
