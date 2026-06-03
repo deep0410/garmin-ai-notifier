@@ -17,21 +17,32 @@ PROMPT_TEMPLATE = """You are a sharp, no-nonsense performance coach reading one 
 You receive JSON with:
 - today: calendar date when this brief is generated (YYYY-MM-DD).
 - reference_day: Garmin wake-up date for last night (usually today; sleep hours live on that row).
+- reference_day_is_today: if true, activity fields on that row (steps, intensity, active calories) are partial.
+- day_count: number of stored days (often small after backfill).
 - goals: step target and sleep hour band.
 - metrics_guide: what each metric means and good_direction ("up", "down", or "target" for sleep band).
 - daily_history: every stored day, oldest to newest, with human-readable metric labels.
+- note: rules for partial days and thin history — follow exactly.
 
-Your job: analyze the full history yourself — trends, highs/lows, vs goals, vs recent days.
-Use ONLY numbers that appear in daily_history. Never invent values.
-Respect good_direction (e.g. lower resting HR and stress are good; higher steps and HRV are good).
-Last night's sleep is on reference_day (Garmin wake-up day), not the calendar day before.
+Your job: analyze history — trends, vs goals, vs recent stored days.
+Use ONLY numbers in daily_history. Never invent values.
+Respect good_direction (lower resting HR/stress good; higher steps/HRV good).
+
+Metric timing (critical):
+- Last night's sleep, HRV, stress, REM, deep sleep → reference_day row (wake-up day).
+- Steps/intensity on reference_day when reference_day_is_today is true → partial today only; never say "yesterday" for that row. Compare steps across dates strictly before today for completed-day rankings.
+- Do not put partial today steps in WATCH as a finished-day failure. Prefer WATCH from overnight concerns or the most recent completed day before today.
+
+Superlatives: if day_count < 14, write "best in your N stored days" (use day_count). Never "personal best", "on record", or "all-time" with thin data.
 
 DIGEST:
 {digest_json}
 
 Write a phone notification brief. Rules:
 - 60–100 words.
-- WATCH/WINS: anchor on reference_day overnight metrics (sleep, HRV, stress, etc.) vs their history; frame WATCH as what to watch out for today given that data.
+- WINS: prioritize reference_day overnight recovery (sleep band, HRV, stress, REM) when strong.
+- WATCH: real risks for today — not partial-step gotchas. Optional: one completed-day activity concern (date before today).
+- TODAY: one action for the rest of today; do not urge hitting step goal if today's steps are still partial early in the day unless clearly far behind.
 - No platitudes. At most one emoji if earned.
 
 FORMAT — blank line between sections:

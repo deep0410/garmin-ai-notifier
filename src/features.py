@@ -86,6 +86,7 @@ def build_digest(rows: list[dict[str, Any]]) -> dict[str, Any]:
         return {
             "today": today,
             "reference_day": ref,
+            "reference_day_is_today": ref == today,
             "note": "no_data",
             "goals": {
                 "steps": config.STEP_GOAL,
@@ -98,14 +99,22 @@ def build_digest(rows: list[dict[str, Any]]) -> dict[str, Any]:
 
     today = date.today().isoformat()
     ref = _resolve_reference_day(rows)
+    ref_is_today = ref == today
     return {
         "today": today,
         "reference_day": ref,
+        "reference_day_is_today": ref_is_today,
         "note": (
             "Calendar today is `today`. `reference_day` is the Garmin wake-up date for last night "
-            "(usually equals today once sleep is synced). WATCH/WINS: use overnight metrics on "
-            "reference_day vs daily_history, framed as what to watch today. TODAY: one action for "
-            "the rest of today. null = no value that day."
+            "(usually equals today once sleep is synced). "
+            "Overnight metrics on reference_day: sleep, HRV, stress, REM, deep sleep, resting HR, "
+            "body battery, training readiness, SpO2 — compare these across daily_history. "
+            "Activity metrics (steps, intensity minutes, active calories) on a row where date equals "
+            "today are PARTIAL (day still in progress). Never call them 'yesterday' or rank them "
+            "against full prior days. For steps/WATCH, use only completed days (date < today) or "
+            "say 'so far today' with no 'lowest/highest in history' unless day_count is large. "
+            "With day_count under 14, say 'best in your N stored days' never 'personal best' or "
+            "'on record'. null = no value that day."
         ),
         "goals": {
             "steps": config.STEP_GOAL,
