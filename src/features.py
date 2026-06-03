@@ -41,10 +41,24 @@ def _format_day(row: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def _has_overnight_sleep(row: dict[str, Any]) -> bool:
+    return row.get("sleep_seconds") is not None
+
+
 def _resolve_reference_day(rows: list[dict[str, Any]]) -> str:
+    """Wake-up day for last night — Garmin stores that sleep on calendar today."""
+    today = date.today().isoformat()
+    by_day = {r["day"]: r for r in rows}
+
+    if today in by_day and _has_overnight_sleep(by_day[today]):
+        return today
+
+    for r in reversed(rows):
+        if _has_overnight_sleep(r):
+            return r["day"]
+
     yesterday = (date.today() - timedelta(days=1)).isoformat()
-    days = {r["day"] for r in rows}
-    if yesterday in days:
+    if yesterday in by_day:
         return yesterday
     for r in reversed(rows):
         if any(r.get(k) is not None for k in config.FIELD_META):
@@ -87,7 +101,12 @@ def build_digest(rows: list[dict[str, Any]]) -> dict[str, Any]:
     return {
         "today": today,
         "reference_day": ref,
-        "note": "Today is `today`. Write the brief for `reference_day` (usually yesterday). daily_history is every row in garmin.db. null = no value that day.",
+        "note": (
+            "Calendar today is `today`. `reference_day` is the Garmin wake-up date for last night "
+            "(usually equals today once sleep is synced). WATCH/WINS: use overnight metrics on "
+            "reference_day vs daily_history, framed as what to watch today. TODAY: one action for "
+            "the rest of today. null = no value that day."
+        ),
         "goals": {
             "steps": config.STEP_GOAL,
             "sleep_hours": list(config.SLEEP_TARGET_HOURS),

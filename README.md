@@ -123,7 +123,7 @@ Only **scalar daily wellness metrics** are stored. There is **no `raw` JSON**, n
 
 `python -m src.main` — pull recent days → format full history → Gemini brief → notification.
 
-GitHub Actions runs at **11:00 UTC** (~7:00 AM US Eastern in EDT; ~6:00 AM in EST), commits updated `garmin.db`, and pushes.
+GitHub Actions runs at **17:00 UTC** (~1:00 PM US Eastern in EDT; ~12:00 PM in EST), commits updated `garmin.db`, and pushes.
 
 ## Gotchas
 

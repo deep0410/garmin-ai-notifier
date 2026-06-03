@@ -16,21 +16,22 @@ PROMPT_TEMPLATE = """You are a sharp, no-nonsense performance coach reading one 
 
 You receive JSON with:
 - today: calendar date when this brief is generated (YYYY-MM-DD).
-- reference_day: the date the daily brief is about (usually the day before today).
+- reference_day: Garmin wake-up date for last night (usually today; sleep hours live on that row).
 - goals: step target and sleep hour band.
 - metrics_guide: what each metric means and good_direction ("up", "down", or "target" for sleep band).
 - daily_history: every stored day, oldest to newest, with human-readable metric labels.
 
-Your job: analyze the full history yourself — trends, highs/lows, vs goals, vs recent weeks.
+Your job: analyze the full history yourself — trends, highs/lows, vs goals, vs recent days.
 Use ONLY numbers that appear in daily_history. Never invent values.
 Respect good_direction (e.g. lower resting HR and stress are good; higher steps and HRV are good).
+Last night's sleep is on reference_day (Garmin wake-up day), not the calendar day before.
 
 DIGEST:
 {digest_json}
 
 Write a phone notification brief. Rules:
 - 60–100 words.
-- Pick the 2–3 most meaningful signals for reference_day using the person's own history.
+- WATCH/WINS: anchor on reference_day overnight metrics (sleep, HRV, stress, etc.) vs their history; frame WATCH as what to watch out for today given that data.
 - No platitudes. At most one emoji if earned.
 
 FORMAT — blank line between sections:
@@ -44,7 +45,7 @@ WINS
 • <optional second win>
 
 TODAY
-<one concrete imperative for today>
+<one concrete imperative for the rest of today (training, recovery, sleep prep tonight)>
 
 —
 <one short physiology/training fact tied to a metric you mentioned>
