@@ -1,8 +1,34 @@
 # Garmin Daily AI Insights
 
-Fully automated daily pipeline: pull Garmin Connect data into SQLite, compute full-history statistics, generate a short Gemini brief, and push it to your phone.
+**Free daily AI brief on your Garmin data — full-history stats, Gemini insight, push to your phone. $0 to run.**
 
-**Cost:** $0 (Garmin API via `garminconnect`, Gemini free tier, GitHub Actions, ntfy/Telegram/email).
+Fully automated pipeline: pull Garmin Connect into SQLite, compute percentiles and trends over your whole history, and deliver a short coached brief via ntfy, Telegram, or email. Runs on GitHub Actions; no server to maintain.
+
+<p align="center">
+  <img src="docs/sample-notification.png" alt="Sample Daily Garmin Brief notification on a phone" width="360">
+</p>
+
+*Example notification layout — your numbers and wording change daily.*
+
+## What you get each morning
+
+```
+WATCH
+• Stress 34 vs 30d avg 23 — worsening
+• Sleep 6.15h — under 7h target
+
+WINS
+• Intensity 63 min — all-time high
+• Resting HR improving, 2-day streak near ATL
+
+TODAY
+In bed 30 minutes earlier tonight.
+
+—
+Poor sleep raises cortisol and daily stress.
+```
+
+**Cost:** $0 (Garmin via `garminconnect`, Gemini free tier, GitHub Actions, ntfy/Telegram/email).
 
 ## Setup
 
@@ -28,7 +54,7 @@ Use your Garmin email, password, and MFA code. Tokens are saved to `~/.garmincon
 BACKFILL_DAYS=400 python -m src.backfill
 ```
 
-Creates `garmin.db`. Commit it to your repo after backfill completes (re-run backfill after schema changes to drop old `raw` data and fill new columns).
+Creates `garmin.db`. Commit it to your repo after backfill completes (re-run backfill after schema changes to refresh columns).
 
 ### 4. GitHub Actions secrets
 
@@ -53,7 +79,7 @@ Paste into secret `GARMIN_TOKENS_B64`, then delete `tokens.tar`.
 
 ### 5. Notifier
 
-**ntfy (default):** Install the ntfy app, subscribe to a long random topic, set `NTFY_TOPIC`.
+**ntfy (default):** Install the [ntfy app](https://ntfy.sh), subscribe to a long random topic, set `NTFY_TOPIC`.
 
 **Telegram:** Create a bot via @BotFather, get your chat id.
 
@@ -63,7 +89,7 @@ Paste into secret `GARMIN_TOKENS_B64`, then delete `tokens.tar`.
 
 ```bash
 cp .env.example .env   # fill in secrets
-NOTIFIER=ntfy python -m src.main
+python -m src.main
 ```
 
 ### 7. Deploy
@@ -81,8 +107,6 @@ Only **scalar daily wellness metrics** are stored. There is **no `raw` JSON**, n
 | Date (`YYYY-MM-DD`) only | Full API responses, heart-rate streams |
 
 **Fitness age** is Garmin’s estimated fitness age (a single number), not your birthdate or home address.
-
-If you already backfilled with an older version that wrote `raw`, run `BACKFILL_DAYS=400 python -m src.backfill` again to refresh rows without raw blobs.
 
 ## Daily run
 
@@ -115,4 +139,5 @@ src/
   main.py
 scripts/mint_token.py
 .github/workflows/daily.yml
+docs/sample-notification.png
 ```
