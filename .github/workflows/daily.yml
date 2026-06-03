@@ -2,8 +2,9 @@ name: garmin-daily
 
 on:
   schedule:
-    # 17:00 UTC ≈ 1:00 PM US Eastern (EDT); ≈ 12:00 PM in EST (winter)
-    - cron: "55 17 * * *"
+    # 1:05 PM America/New_York (DST-aware). Minute 5 avoids top-of-hour queue drops.
+    - cron: "16 14 * * *"
+      timezone: America/New_York
   workflow_dispatch: {}
 
 permissions:

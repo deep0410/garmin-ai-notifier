@@ -116,10 +116,11 @@ Only **scalar daily wellness metrics** are stored. There is **no `raw` JSON**, n
 
 `python -m src.main` — pull recent days → format full history → Gemini brief → notification.
 
-GitHub Actions runs at **17:00 UTC** (~1:00 PM US Eastern in EDT; ~12:00 PM in EST), commits updated `garmin.db`, and pushes.
+GitHub Actions runs daily at **1:05 PM US Eastern** (`America/New_York`, DST-aware), commits updated `garmin.db`, and pushes.
 
 ## Gotchas
 
+- **Schedule not firing:** Cron only runs from the workflow on `main`. Changing the cron many times in one day can skip runs; after editing, wait until the next slot or use **Actions → garmin-daily → Run workflow**. Confirm the workflow is **enabled** (not disabled in the Actions tab). Scheduled runs can lag a few minutes; they never appeared in history until the cron stays stable on `main`.
 - **Cron drift:** Scheduled runs may start a few minutes late; fine for a daily brief.
 - **Workflow auto-disable:** Repos with no commits for 60 days disable scheduled workflows. Committing `garmin.db` each run prevents this.
 - **Token expiry:** Re-run `scripts/mint_token.py` when Actions fail auth (~yearly).
