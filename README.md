@@ -153,3 +153,6 @@ scripts/mint_token.py
 docs/sample-notification.png
 ```
 
+## License
+
+MIT — see [LICENSE](LICENSE).
