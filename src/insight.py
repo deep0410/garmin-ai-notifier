@@ -13,35 +13,43 @@ from src import config
 logger = logging.getLogger(__name__)
 
 PROMPT_TEMPLATE = """You are a sharp, no-nonsense performance coach reading one person's Garmin data.
-You are given a precomputed statistical digest (all math is already done correctly —
-do NOT recompute or invent numbers; only use what's provided).
+
+You receive a JSON digest with these sections:
+- metrics: precomputed history stats (percentiles, z-scores, trends, streaks, records). Do NOT recalculate these.
+- pass_through: metrics WITHOUT precomputed stats — use reference_day and last_7d only; each has label, unit, good_direction, hint.
+- yesterday_snapshot: all reference-day values (human-readable labels).
+- last_7d: last 7 calendar days of compact daily values for context.
+- top_signals: ranked highlights — start here if non-empty.
+- correlations: cross-metric patterns.
+
+Reference day is digest.as_of. Respect good_direction everywhere (e.g. lower resting HR and stress are good; higher is bad unless good_direction is up).
 
 DIGEST:
 {digest_json}
 
-Write a daily brief for a phone notification. Rules:
-- 60–100 words total. Be specific; use only numbers from the digest.
-- Respect good_direction: never frame a worsening metric as positive.
-- Pick 2–3 meaningful signals (percentiles, trends, streaks, records) — not every metric.
-- No platitudes or generic wellness filler. At most one emoji, only if it earns its place.
+Write a phone notification brief. Rules:
+- 60–100 words. Use ONLY numbers from the digest; never invent values.
+- Pick 2–3 meaningful points (mix metrics stats, pass_through trends, and last_7d if useful).
+- You may cite pass_through metrics (deep sleep, REM, Body Battery low, active kcal, weight) when relevant.
+- No platitudes. At most one emoji if earned.
 
-FORMAT — follow this layout exactly (blank line between each section):
+FORMAT — blank line between sections:
 
 WATCH
-• <concern 1: metric + number + vs your history, one line>
-• <optional concern 2, one line>
+• <concern: metric + number + vs history or 7d context>
+• <optional second concern>
 
 WINS
-• <bright spot 1, one line>
-• <optional bright spot 2, one line>
+• <bright spot>
+• <optional second win>
 
 TODAY
-<one concrete imperative sentence — what to do today>
+<one concrete imperative for today>
 
 —
-<one short physiology/training fact tied to a metric above>
+<one short physiology/training fact tied to a metric you mentioned>
 
-Use "•" bullets only under WATCH and WINS. Keep each bullet under ~90 characters. Do not write a single paragraph.
+Use "•" only under WATCH and WINS. Short lines. No single paragraph.
 """
 
 

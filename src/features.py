@@ -402,6 +402,83 @@ def _top_signals(
     return [{"label": lbl, "detail": det} for _, lbl, det in top]
 
 
+def _display_value(key: str, val: Any) -> Any:
+    if val is None:
+        return None
+    try:
+        n = float(val)
+    except (TypeError, ValueError):
+        return val
+    if key == "sleep_seconds":
+        return round(n / 3600, 2)
+    if key in ("deep_sleep_seconds", "rem_sleep_seconds"):
+        return round(n / 60)
+    if key == "weight_grams":
+        return round(n / 1000, 2)
+    if key.endswith("_seconds"):
+        return int(n)
+    return int(n) if n == int(n) else round(n, 2)
+
+
+def _compact_day(row: dict[str, Any], keys: list[str] | None = None) -> dict[str, Any]:
+    out: dict[str, Any] = {"day": row.get("day")}
+    for key in keys or [k for k in config.DAILY_COLUMNS if k != "day"]:
+        if key not in row or row[key] is None:
+            continue
+        meta = config.FIELD_META.get(key, {})
+        unit = meta.get("unit", "")
+        label = meta.get("label", key)
+        val = _display_value(key, row[key])
+        out[f"{label} ({unit})" if unit else label] = val
+    return out
+
+
+def _yesterday_snapshot(rows: list[dict], as_of: str) -> dict[str, Any]:
+    row = next((r for r in rows if r["day"] == as_of), None)
+    if not row:
+        return {}
+    snap = _compact_day(row)
+    snap["note"] = "Raw reference-day values; use metrics.* for history stats."
+    return snap
+
+
+def _last_7d(rows: list[dict], as_of: str) -> list[dict[str, Any]]:
+    cutoff = (datetime.strptime(as_of, "%Y-%m-%d").date() - timedelta(days=6)).isoformat()
+    window = [r for r in rows if cutoff <= r["day"] <= as_of]
+    window.sort(key=lambda r: r["day"])
+    return [_compact_day(r) for r in window[-7:]]
+
+
+def _pass_through(rows: list[dict], as_of: str) -> dict[str, Any]:
+    """Metrics without Python stats — yesterday + 7d trend for Gemini."""
+    cutoff = (datetime.strptime(as_of, "%Y-%m-%d").date() - timedelta(days=6)).isoformat()
+    window = sorted(
+        (r for r in rows if cutoff <= r["day"] <= as_of),
+        key=lambda r: r["day"],
+    )
+    ref = next((r for r in rows if r["day"] == as_of), None)
+    out: dict[str, Any] = {}
+    for key in config.PASS_THROUGH_KEYS:
+        meta = config.FIELD_META[key]
+        y_raw = ref.get(key) if ref else None
+        if y_raw is None and not any(r.get(key) is not None for r in window):
+            continue
+        trend = []
+        for r in window:
+            v = r.get(key)
+            if v is not None:
+                trend.append({"day": r["day"], "v": _display_value(key, v)})
+        out[key] = {
+            "label": meta["label"],
+            "unit": meta["unit"],
+            "good_direction": meta["good"],
+            "hint": meta["hint"],
+            "reference_day": _display_value(key, y_raw) if y_raw is not None else None,
+            "last_7d": trend,
+        }
+    return out
+
+
 def build_digest(rows: list[dict[str, Any]]) -> dict[str, Any]:
     if not rows:
         return {
@@ -410,6 +487,9 @@ def build_digest(rows: list[dict[str, Any]]) -> dict[str, Any]:
             "metrics": {},
             "correlations": [],
             "top_signals": [],
+            "yesterday_snapshot": {},
+            "last_7d": [],
+            "pass_through": {},
         }
 
     as_of, note = _resolve_as_of(rows)
@@ -471,5 +551,8 @@ def build_digest(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "metrics": metrics,
         "correlations": correlations,
         "top_signals": _top_signals(metrics, correlations),
+        "yesterday_snapshot": _yesterday_snapshot(rows, as_of),
+        "last_7d": _last_7d(rows, as_of),
+        "pass_through": _pass_through(rows, as_of),
     }
     return digest

@@ -4,9 +4,7 @@
 
 Fully automated pipeline: pull Garmin Connect into SQLite, compute percentiles and trends over your whole history, and deliver a short coached brief via ntfy, Telegram, or email. Runs on GitHub Actions; no server to maintain.
 
-<p align="center">
-  <img src="docs/sample-notification.png" alt="Sample Daily Garmin Brief notification on a phone" width="360">
-</p>
+
 
 *Example notification layout — your numbers and wording change daily.*
 
@@ -51,7 +49,7 @@ Use your Garmin email, password, and MFA code. Tokens are saved to `~/.garmincon
 ### 3. Backfill history
 
 ```bash
-BACKFILL_DAYS=400 python -m src.backfill
+BACKFILL_DAYS=180 python -m src.backfill
 ```
 
 Creates `garmin.db`. Commit it to your repo after backfill completes (re-run backfill after schema changes to refresh columns).
@@ -68,14 +66,16 @@ base64 -i tokens.tar | tr -d '\n'   # macOS
 
 Paste into secret `GARMIN_TOKENS_B64`, then delete `tokens.tar`.
 
-| Secret | Purpose |
-|--------|---------|
-| `GARMIN_TOKENS_B64` | base64 tar of `~/.garminconnect` |
-| `GEMINI_API_KEY` | [Google AI Studio](https://aistudio.google.com) |
-| `NOTIFIER` | `ntfy` (default), `telegram`, or `email` |
-| `NTFY_TOPIC` | long random topic (ntfy) |
-| `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | Telegram |
-| `EMAIL_USER` / `EMAIL_APP_PASSWORD` / `EMAIL_TO` | Gmail app password |
+
+| Secret                                           | Purpose                                         |
+| ------------------------------------------------ | ----------------------------------------------- |
+| `GARMIN_TOKENS_B64`                              | base64 tar of `~/.garminconnect`                |
+| `GEMINI_API_KEY`                                 | [Google AI Studio](https://aistudio.google.com) |
+| `NOTIFIER`                                       | `ntfy` (default), `telegram`, or `email`        |
+| `NTFY_TOPIC`                                     | long random topic (ntfy)                        |
+| `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID`        | Telegram                                        |
+| `EMAIL_USER` / `EMAIL_APP_PASSWORD` / `EMAIL_TO` | Gmail app password                              |
+
 
 ### 5. Notifier
 
@@ -100,11 +100,13 @@ Create a GitHub repo, commit everything including `garmin.db`, add secrets, run 
 
 Only **scalar daily wellness metrics** are stored. There is **no `raw` JSON**, no GPS, no activity routes, no maps, and no activity list/workout details.
 
-| Stored | Not stored |
-|--------|------------|
-| Steps, resting HR, sleep (duration/score/stages), stress, Body Battery high/low, HRV, training readiness, intensity minutes, active kcal | Location, lat/long, track polyline |
-| SpO2, VO2 max, Garmin **fitness age**, weight (g), body fat % | Activity names, routes, timestamps per lap |
-| Date (`YYYY-MM-DD`) only | Full API responses, heart-rate streams |
+
+| Stored                                                                                                                                   | Not stored                                 |
+| ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| Steps, resting HR, sleep (duration/score/stages), stress, Body Battery high/low, HRV, training readiness, intensity minutes, active kcal | Location, lat/long, track polyline         |
+| SpO2, VO2 max, Garmin **fitness age**, weight (g), body fat %                                                                            | Activity names, routes, timestamps per lap |
+| Date (`YYYY-MM-DD`) only                                                                                                                 | Full API responses, heart-rate streams     |
+
 
 **Fitness age** is Garmin’s estimated fitness age (a single number), not your birthdate or home address.
 
@@ -141,3 +143,4 @@ scripts/mint_token.py
 .github/workflows/daily.yml
 docs/sample-notification.png
 ```
+
