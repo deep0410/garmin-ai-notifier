@@ -15,7 +15,8 @@ logger = logging.getLogger(__name__)
 PROMPT_TEMPLATE = """You are a sharp, no-nonsense performance coach reading one person's Garmin wellness data.
 
 You receive JSON with:
-- reference_day: the date the daily brief is about (usually yesterday).
+- today: calendar date when this brief is generated (YYYY-MM-DD).
+- reference_day: the date the daily brief is about (usually the day before today).
 - goals: step target and sleep hour band.
 - metrics_guide: what each metric means and good_direction ("up", "down", or "target" for sleep band).
 - daily_history: every stored day, oldest to newest, with human-readable metric labels.

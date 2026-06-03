@@ -27,15 +27,17 @@ def _display_value(key: str, val: Any) -> Any:
 
 
 def _format_day(row: dict[str, Any]) -> dict[str, Any]:
+    """Every DB column for this day — null stays null so nothing is hidden."""
     out: dict[str, Any] = {"date": row.get("day")}
     for key in config.DAILY_COLUMNS:
-        if key == "day" or row.get(key) is None:
+        if key == "day":
             continue
         meta = config.FIELD_META[key]
         unit = meta.get("unit", "")
         label = meta["label"]
         key_label = f"{label} ({unit})" if unit else label
-        out[key_label] = _display_value(key, row[key])
+        raw = row.get(key)
+        out[key_label] = _display_value(key, raw) if raw is not None else None
     return out
 
 
@@ -64,9 +66,11 @@ def _metrics_guide() -> dict[str, Any]:
 
 def build_digest(rows: list[dict[str, Any]]) -> dict[str, Any]:
     """Pass full daily history + field guide; Gemini does all interpretation."""
+    today = date.today().isoformat()
     if not rows:
         ref = (date.today() - timedelta(days=1)).isoformat()
         return {
+            "today": today,
             "reference_day": ref,
             "note": "no_data",
             "goals": {
@@ -78,10 +82,12 @@ def build_digest(rows: list[dict[str, Any]]) -> dict[str, Any]:
             "day_count": 0,
         }
 
+    today = date.today().isoformat()
     ref = _resolve_reference_day(rows)
     return {
+        "today": today,
         "reference_day": ref,
-        "note": "Write the brief for reference_day. Compare against full daily_history.",
+        "note": "Today is `today`. Write the brief for `reference_day` (usually yesterday). daily_history is every row in garmin.db. null = no value that day.",
         "goals": {
             "steps": config.STEP_GOAL,
             "sleep_hours": list(config.SLEEP_TARGET_HOURS),
