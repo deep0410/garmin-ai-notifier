@@ -1,5 +1,9 @@
 # Triggered by workflow_dispatch only (manual or external cron).
 # Do not use GitHub's on.schedule — it is unreliable. See README: crontab.guru + cron-job.org.
+#
+# Garmin auth: GitHub OIDC → AWS IAM role → Secrets Manager (garmin-ai-notifier/garmin-tokens).
+# Tokens are restored before the run and persisted after (even on failure) so refresh-token
+# rotation self-heals. Only garmin.db is committed. See README setup steps 4–6.
 
 name: garmin-daily
 
@@ -8,6 +12,11 @@ on:
 
 permissions:
   contents: write
+  id-token: write
+
+env:
+  AWS_REGION: us-east-1
+  GARMIN_TOKEN_SECRET_NAME: garmin-ai-notifier/garmin-tokens
 
 jobs:
   run:
@@ -21,33 +30,28 @@ jobs:
 
       - run: pip install -r requirements.txt
 
-      - name: Restore Garmin token
-        env:
-          GARMIN_TOKENS_B64: ${{ secrets.GARMIN_TOKENS_B64 }}
-        run: |
-          set -euo pipefail
-          mkdir -p ~/.garminconnect
-          if [ -z "${GARMIN_TOKENS_B64}" ]; then
-            echo "GARMIN_TOKENS_B64 secret is empty" >&2
-            exit 1
-          fi
-          printf '%s' "$GARMIN_TOKENS_B64" | tr -d '\n\r\t ' | base64 -d > tokens.tar
-          tar -tf tokens.tar >/dev/null
-          tar -xf tokens.tar -C ~/.garminconnect
-          rm -f tokens.tar
-          if [ ! -f ~/.garminconnect/garmin_tokens.json ]; then
-            echo "Token file missing after extract — re-run scripts/pack_tokens.sh locally" >&2
-            ls -la ~/.garminconnect >&2 || true
-            exit 1
-          fi
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Restore Garmin token from AWS
+        run: bash scripts/token_aws.sh restore
 
       - name: Run daily brief
+        id: daily
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
         run: python -m src.main
 
+      - name: Persist rotated Garmin token to AWS
+        if: always() && steps.daily.conclusion != 'cancelled'
+        run: bash scripts/token_aws.sh persist
+
       - name: Persist data
+        if: steps.daily.outcome == 'success'
         run: |
           git config user.name "garmin-bot"
           git config user.email "bot@users.noreply.github.com"
