@@ -24,6 +24,8 @@ _SAFE_API_CALLS = (
     "get_body_composition",
     "get_max_metrics",
     "get_fitnessage_data",
+    "get_userprofile_settings",
+    "get_user_profile",
 )
 
 
@@ -296,6 +298,46 @@ def _extract_fitness_age(fitnessage: Any) -> int | None:
             or fitnessage.get("biometricAge")
         )
     return None
+
+
+def fetch_profile(api: Garmin) -> dict[str, Any]:
+    """Static demographics so the coach can calibrate (age/sex-relative norms)."""
+    raw = _call(api, "get_userprofile_settings") or {}
+    ud = raw.get("userData") if isinstance(raw, dict) else None
+    ud = ud if isinstance(ud, dict) else {}
+
+    def g(*keys: str) -> Any:
+        for k in keys:
+            v = ud.get(k)
+            if v is not None:
+                return v
+        return None
+
+    age = None
+    birth = g("birthDate", "birthdate", "dateOfBirth")
+    if isinstance(birth, str) and len(birth) >= 7:
+        try:
+            from datetime import date as _date
+
+            y, m, d = (int(x) for x in birth.split("T")[0].split("-")[:3])
+            t = _date.today()
+            age = t.year - y - ((t.month, t.day) < (m, d))
+        except (ValueError, TypeError):
+            age = None
+
+    w = g("weight")  # grams in Garmin
+    weight_kg = round(w / 1000, 1) if isinstance(w, (int, float)) and w > 1000 else (
+        round(float(w), 1) if isinstance(w, (int, float)) else None
+    )
+    h = g("height")  # cm
+
+    return {
+        "age": age,
+        "sex": g("gender", "sex"),
+        "height_cm": round(float(h), 1) if isinstance(h, (int, float)) else None,
+        "weight_kg": weight_kg,
+        "activity_level": g("activityLevel", "userActivityLevel"),
+    }
 
 
 def fetch_day(api: Garmin, iso_date: str) -> dict[str, Any]:

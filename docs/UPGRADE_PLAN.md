@@ -125,6 +125,35 @@ never mention "stored days"/`day_count`; early in the day treat today's activity
 
 ---
 
+## 4b. Device reality — Garmin Venu 3 / 3S (validated)
+
+Confirmed against the live diagnostic + Garmin's manual. The Venu 3 **does** support VO2 max
+(running & cycling) and Pulse Ox — earlier "device gap" call was wrong for those.
+
+- **Captured & working:** Body Battery, HRV + HRV status, sleep score/stages/respiration/sleep
+  stress/awakenings, stress avg+peak, floors, steps, intensity, active kcal, resting HR, fitness age.
+- **Supported but conditional (extractors already in place, populate when data exists):**
+  - **VO2 max** — only updates after a qualifying outdoor brisk walk/run. Do one and it fills in.
+  - **Pulse Ox / SpO2** — off by default (battery saver). Enable: watch → Settings → Pulse Ox →
+    During Sleep / All Day.
+- **Genuinely not on the Venu 3** (correctly excluded): Training Readiness, Training Status,
+  Race Predictor, Endurance/Hill score.
+- **Profile context added:** age, sex, height, weight now fetched (`get_userprofile_settings`) and
+  passed to the brief so the coach calibrates to the person, not generic norms.
+
+## 4c. Status — IMPLEMENTED
+
+The staged pipeline is now live in code:
+
+- `src/analysis.py` — deterministic feature engine. Caps history to the most recent
+  `HISTORY_DAYS` (default **120**), computes per-metric value/avg_30d/trend/z/percentile/
+  extreme/signal grouped by domain. Output ≈ **1,150 tokens** (was ~40k of raw rows).
+- `src/insight.py` — **Stage 1 Analyst** (feature report → structured findings JSON) then
+  **Stage 2 Editor** (findings → final notification). Each call sees a small input.
+- `src/main.py` — `login → pull → fetch_profile → analysis.build_feature_report → insight.generate → notify`.
+- Profile (age/sex/height/weight) flows in so norms are calibrated to the person.
+- `HISTORY_DAYS` env var tunes the window without code changes.
+
 ## 5. Build order
 
 1. **Diagnostic script** — dump raw JSON for all candidate endpoints (needs your Garmin tokens; you run it).

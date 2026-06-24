@@ -29,6 +29,8 @@ GARMIN_TOKENSTORE = os.path.expanduser(
 
 DAYS_BACK = int(os.getenv("DAYS_BACK", "3"))
 BACKFILL_DAYS = int(os.getenv("BACKFILL_DAYS", "180"))
+# How many most-recent days of history the brief analyzes (older data still stored).
+HISTORY_DAYS = int(os.getenv("HISTORY_DAYS", "120"))
 
 STEP_GOAL = int(os.getenv("STEP_GOAL", "8000"))
 SLEEP_TARGET_HOURS = (

@@ -13,8 +13,9 @@ from src import garmin_client
 logger = logging.getLogger(__name__)
 
 
-def run() -> int:
-    api = garmin_client.login()
+def run(api=None) -> int:
+    if api is None:
+        api = garmin_client.login()
     today = date.today()
     errors = 0
     for i in range(config.DAYS_BACK + 1):

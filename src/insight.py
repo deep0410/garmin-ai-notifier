@@ -1,4 +1,11 @@
-"""Gemini daily brief from formatted Garmin history."""
+"""Two-stage Gemini daily brief.
+
+Stage 1 (Analyst): reads the deterministic feature report (already crunched from ~120
+days by src.analysis) and decides WHAT matters -> structured JSON.
+Stage 2 (Editor): turns those findings into the final phone notification -> text.
+
+The heavy data work is done in code, so each LLM call sees a small, focused input.
+"""
 
 from __future__ import annotations
 
@@ -12,63 +19,96 @@ from src import config
 
 logger = logging.getLogger(__name__)
 
-PROMPT_TEMPLATE = """You are a sharp, no-nonsense performance coach reading one person's Garmin wellness data.
 
-You receive JSON with:
-- today: calendar date when this brief is generated (YYYY-MM-DD).
-- reference_day: Garmin wake-up date for last night (usually today; sleep hours live on that row).
-- reference_day_is_today: if true, activity fields on that row (steps, intensity, active calories) are partial.
-- day_count: number of stored days (often small after backfill).
-- goals: step target and sleep hour band.
-- metrics_guide: what each metric means and good_direction ("up", "down", or "target" for sleep band).
-- daily_history: every stored day, oldest to newest, with human-readable metric labels.
-- note: rules for partial days and thin history — follow exactly.
+# --- Stage 1: Analyst -------------------------------------------------------------
+ANALYST_PROMPT = """You are a sports physiologist analyzing one person's Garmin (Venu 3) wellness data.
 
-Your job: analyze history — trends, vs goals, vs recent stored days.
-Use ONLY numbers in daily_history. Never invent values.
-Respect good_direction (lower resting HR/stress good; higher steps/HRV good).
+You are given a FEATURE REPORT already computed from up to ~120 days of history. You do NOT
+see raw daily rows - the statistics are done for you. Each metric includes:
+- value (current: last night for overnight metrics, most recent completed day for activity),
+- unit, good_direction ("up"/"down"/"target" band/"status" text),
+- avg_30d, pct_vs_30d, z (std-devs from baseline), percentile (0-100 within history),
+- extreme ("highest/lowest in history"), signal ("good"/"watch"/"neutral"),
+- today_partial when today's activity is still accruing.
 
-Metric timing (critical):
-- Last night's sleep, HRV, stress, REM, deep sleep → reference_day row (wake-up day).
-- Steps/intensity on reference_day when reference_day_is_today is true → partial today only; never say "yesterday" for that row. Compare steps across dates strictly before today for completed-day rankings.
-- Do not put partial today steps in WATCH as a finished-day failure. Prefer WATCH from overnight concerns or the most recent completed day before today.
+Context fields: today, time_of_day, hour_local, reference_day, reference_day_is_today,
+profile (age/sex/height/weight - calibrate norms to this person), goals, history_span,
+no_data_metrics (absent on this device - ignore, never mention).
 
-Superlatives: if day_count < 14, write "best in your N stored days" (use day_count). Never "personal best", "on record", or "all-time" with thin data.
+Rules:
+- Use ONLY values in the report. Never invent numbers.
+- Trust `signal` and `z`: |z|>=0.8 is a real deviation; small wobbles are noise, not news.
+- reference_day_is_today=true means today's activity is PARTIAL: never treat low partial
+  steps/floors as a failure; if early in the day, today's activity is "still ahead".
+- Calibrate to profile (e.g. an HRV/resting-HR that's good for their age).
+- Express standout values as natural time windows ("best in ~3 weeks"); NEVER "personal
+  best", "all-time", "on record", or any day count.
 
-DIGEST:
-{digest_json}
+FEATURE REPORT:
+{report_json}
 
-Write a phone notification brief. Rules:
-- 60–100 words.
-- WINS: prioritize reference_day overnight recovery (sleep band, HRV, stress, REM) when strong.
-- WATCH: real risks for today — not partial-step gotchas. Optional: one completed-day activity concern (date before today).
-- TODAY: one action for the rest of today; do not urge hitting step goal if today's steps are still partial early in the day unless clearly far behind.
-- No platitudes. At most one emoji if earned.
-
-FORMAT — blank line between sections:
-
-WATCH
-• <concern: metric + number + why it matters vs their history>
-• <optional second concern>
-
-WINS
-• <bright spot>
-• <optional second win>
-
-TODAY
-<one concrete imperative for the rest of today (training, recovery, sleep prep tonight)>
-
-—
-<one short physiology/training fact tied to a metric you mentioned>
-
-Use "•" only under WATCH and WINS. Short lines. No single paragraph.
+Return ONLY valid JSON (no prose, no code fences) with this shape:
+{{
+  "headline": "<one clause whole-body verdict, e.g. 'a green-light day' / 'recovered but under-slept' / 'ease off today'>",
+  "domains": {{"recovery": "<one sentence with key numbers>", "sleep": "...", "activity": "...", "fitness": "..."}},
+  "wins": ["<fact with number, from one domain>", "..."],
+  "watches": ["<only genuine signal=='watch' deviations; [] if none>"],
+  "today": ["<1-2 concrete actions, time-of-day aware>"],
+  "fact": "<one physiology fact tied to a specific metric above>"
+}}
+Only include domains that have data. wins: up to 3, each a DIFFERENT domain. watches: 0-2, one per theme.
 """
 
 
-def build_prompt(digest: dict) -> str:
-    return PROMPT_TEMPLATE.format(
-        digest_json=json.dumps(digest, indent=2, default=str)
-    )
+# --- Stage 2: Editor --------------------------------------------------------------
+EDITOR_PROMPT = """You are the editor writing the final morning phone notification from an analyst's findings.
+
+It is currently {time_of_day} (hour {hour_local}). reference_day_is_today={ref_is_today}.
+
+ANALYST FINDINGS (JSON):
+{findings_json}
+
+Write the notification EXACTLY in this layout, one blank line between sections:
+
+OVERVIEW
+<2-3 short flowing lines from "headline" plus the domain reads: a whole-body picture across
+recovery, sleep, activity and fitness. Time-aware - today is still ahead. No bullets.>
+
+WIN
+- <from findings.wins - keep each to one tight line, different domains, no stacked sleep facts>
+
+WATCH
+- <from findings.watches - one per theme. If watches is empty, write exactly one line:
+  "Nothing flagged - you're in good shape.">
+
+TODAY
+- <from findings.today - 1-2 concrete actions; don't nag about step/floor goals in the morning>
+
+-
+<findings.fact, trimmed to one short line>
+
+Rules: ~90-140 words. Start bullet lines with a real bullet character under WIN, WATCH, TODAY
+only (never under OVERVIEW). Short lines. Warm, direct, no platitudes. At most one emoji, only
+if earned. Add no numbers not in the findings. Never mention day counts, "stored days",
+"personal best", or "all-time".
+"""
+
+
+def _parse_findings(text: str) -> dict | str:
+    """Best-effort JSON parse of the analyst output; fall back to raw text."""
+    t = text.strip()
+    if t.startswith("```"):
+        t = t[3:]
+        if t[:4].lower() == "json":
+            t = t[4:]
+        t = t.rsplit("```", 1)[0]
+    start, end = t.find("{"), t.rfind("}")
+    if start != -1 and end > start:
+        try:
+            return json.loads(t[start:end + 1])
+        except json.JSONDecodeError:
+            pass
+    return text
 
 
 def format_brief(text: str) -> str:
@@ -81,9 +121,12 @@ def format_brief(text: str) -> str:
             continue
         if out and out[-1] != "":
             prev = out[-1]
-            if prev in ("WATCH", "WINS") and not ln.startswith("•"):
+            if prev in ("WATCH", "WIN", "WINS", "TODAY") and not ln.startswith(("•", "-", "*")):
                 out.append(f"• {ln}")
                 continue
+        # normalize leading "-"/"*" bullets to a real bullet
+        if ln[:2] in ("- ", "* "):
+            ln = "• " + ln[2:]
         out.append(ln)
     formatted = "\n".join(out).strip()
     while "\n\n\n" in formatted:
@@ -115,14 +158,9 @@ def _is_rate_limit(err: Exception) -> bool:
     return "429" in msg or "rate" in msg or "quota" in msg or "resource_exhausted" in msg
 
 
-def generate(digest: dict) -> str:
-    if not config.GEMINI_API_KEY:
-        raise ValueError("GEMINI_API_KEY is not set")
-
-    client = genai.Client(api_key=config.GEMINI_API_KEY)
-    prompt = build_prompt(digest)
+def _complete(client: "genai.Client", prompt: str) -> str:
+    """Run one prompt through the primary model, falling back on rate limit."""
     models = [config.GEMINI_MODEL, config.GEMINI_FALLBACK]
-
     last_err: Exception | None = None
     for i, model in enumerate(models):
         try:
@@ -130,12 +168,42 @@ def generate(digest: dict) -> str:
             text = _extract_text(response)
             if not text:
                 raise RuntimeError(f"Empty response from {model}")
-            return format_brief(text)
+            return text
         except Exception as err:
             last_err = err
             logger.warning("Gemini %s failed: %s", model, err)
             if i == 0 and _is_rate_limit(err):
                 continue
             raise
-
     raise RuntimeError(f"Gemini failed: {last_err}") from last_err
+
+
+def generate(report: dict) -> str:
+    """Analyst -> Editor. `report` is the dict from src.analysis.build_feature_report."""
+    if not config.GEMINI_API_KEY:
+        raise ValueError("GEMINI_API_KEY is not set")
+
+    client = genai.Client(api_key=config.GEMINI_API_KEY)
+
+    analyst_raw = _complete(
+        client,
+        ANALYST_PROMPT.format(report_json=json.dumps(report, indent=2, default=str)),
+    )
+    findings = _parse_findings(analyst_raw)
+    logger.info("Analyst findings parsed: %s", isinstance(findings, dict))
+
+    findings_json = (
+        json.dumps(findings, indent=2, default=str)
+        if isinstance(findings, dict)
+        else str(findings)
+    )
+    brief = _complete(
+        client,
+        EDITOR_PROMPT.format(
+            findings_json=findings_json,
+            time_of_day=report.get("time_of_day", "morning"),
+            hour_local=report.get("hour_local", "?"),
+            ref_is_today=report.get("reference_day_is_today", False),
+        ),
+    )
+    return format_brief(brief)

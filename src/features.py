@@ -97,7 +97,9 @@ def _metrics_guide() -> dict[str, Any]:
     return guide
 
 
-def build_digest(rows: list[dict[str, Any]]) -> dict[str, Any]:
+def build_digest(
+    rows: list[dict[str, Any]], profile: dict[str, Any] | None = None
+) -> dict[str, Any]:
     """Pass full daily history + field guide; Gemini does all interpretation."""
     today = date.today().isoformat()
     if not rows:
@@ -105,6 +107,7 @@ def build_digest(rows: list[dict[str, Any]]) -> dict[str, Any]:
         return {
             "today": today,
             **_time_context(),
+            "profile": profile or {},
             "reference_day": ref,
             "reference_day_is_today": ref == today,
             "note": "no_data",
@@ -123,6 +126,7 @@ def build_digest(rows: list[dict[str, Any]]) -> dict[str, Any]:
     return {
         "today": today,
         **_time_context(),
+        "profile": profile or {},
         "reference_day": ref,
         "reference_day_is_today": ref_is_today,
         "note": (
