@@ -2,10 +2,29 @@
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from src import config
+
+
+def _time_context() -> dict[str, Any]:
+    """Local clock context so the brief knows it's morning and today is still unfolding."""
+    now = datetime.now()
+    hour = now.hour
+    if hour < 5:
+        tod = "overnight"
+    elif hour < 11:
+        tod = "morning"
+    elif hour < 17:
+        tod = "afternoon"
+    else:
+        tod = "evening"
+    return {
+        "now_local": now.isoformat(timespec="minutes"),
+        "hour_local": hour,
+        "time_of_day": tod,
+    }
 
 
 def _display_value(key: str, val: Any) -> Any:
@@ -17,7 +36,7 @@ def _display_value(key: str, val: Any) -> Any:
         return val
     if key == "sleep_seconds":
         return round(n / 3600, 2)
-    if key in ("deep_sleep_seconds", "rem_sleep_seconds"):
+    if key in ("deep_sleep_seconds", "rem_sleep_seconds", "light_sleep_seconds"):
         return round(n / 60, 1)
     if key == "weight_grams":
         return round(n / 1000, 2)
@@ -85,6 +104,7 @@ def build_digest(rows: list[dict[str, Any]]) -> dict[str, Any]:
         ref = (date.today() - timedelta(days=1)).isoformat()
         return {
             "today": today,
+            **_time_context(),
             "reference_day": ref,
             "reference_day_is_today": ref == today,
             "note": "no_data",
@@ -102,6 +122,7 @@ def build_digest(rows: list[dict[str, Any]]) -> dict[str, Any]:
     ref_is_today = ref == today
     return {
         "today": today,
+        **_time_context(),
         "reference_day": ref,
         "reference_day_is_today": ref_is_today,
         "note": (

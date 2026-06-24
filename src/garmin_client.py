@@ -101,29 +101,52 @@ def _extract_resting_hr(rhr: Any) -> int | None:
 
 
 def _extract_body_battery(bb: Any) -> tuple[int | None, int | None]:
+    """Garmin returns a per-day list; each item has bodyBatteryValuesArray = [[ts, level], ...].
+    Derive high/low from those level samples (the old highBodyBattery keys do not exist)."""
     if not bb:
         return None, None
-    highs: list[int] = []
-    lows: list[int] = []
+    levels: list[int] = []
     items = bb if isinstance(bb, list) else [bb]
     for item in items:
         if not isinstance(item, dict):
             continue
-        h = _to_int(
-            item.get("highBodyBattery")
-            or item.get("bodyBatteryHighestValue")
-        )
-        lo = _to_int(
-            item.get("lowBodyBattery")
-            or item.get("bodyBatteryLowestValue")
-        )
-        if h is not None:
-            highs.append(h)
-        if lo is not None:
-            lows.append(lo)
-    if not highs and not lows:
+        # explicit summary keys first, if a future API version provides them
+        for k in ("bodyBatteryHighestValue", "highBodyBattery"):
+            v = _to_int(item.get(k))
+            if v is not None:
+                levels.append(v)
+        for k in ("bodyBatteryLowestValue", "lowBodyBattery"):
+            v = _to_int(item.get(k))
+            if v is not None:
+                levels.append(v)
+        for key in (
+            "bodyBatteryValuesArray",
+            "bodyBatteryValuesArrayList",
+        ):
+            arr = item.get(key)
+            if not isinstance(arr, list):
+                continue
+            for pt in arr:
+                seq = pt if isinstance(pt, list) else []
+                for cand in seq[1:]:  # [timestamp, level, ...] -> skip timestamp
+                    v = _to_int(cand)
+                    if v is not None and 0 <= v <= 100:
+                        levels.append(v)
+                        break
+    if not levels:
         return None, None
-    return (max(highs) if highs else None, min(lows) if lows else None)
+    return max(levels), min(levels)
+
+
+def _extract_hrv_status(hrv: Any) -> str | None:
+    if not isinstance(hrv, dict):
+        return None
+    summary = hrv.get("hrvSummary") or hrv.get("summary") or hrv
+    if isinstance(summary, dict):
+        status = summary.get("status")
+        if isinstance(status, str) and status.strip():
+            return status.strip()
+    return None
 
 
 def _extract_hrv(hrv: Any) -> int | None:
@@ -298,23 +321,40 @@ def fetch_day(api: Garmin, iso_date: str) -> dict[str, Any]:
     bb_high, bb_low = _extract_body_battery(bb)
     weight_g, body_fat = _extract_body_comp(body)
 
+    # Sleep score lives at dailySleepDTO.sleepScores.overall.value (older paths kept as fallback).
+    sleep_scores = dto.get("sleepScores") if isinstance(dto.get("sleepScores"), dict) else {}
+    overall = sleep_scores.get("overall") if isinstance(sleep_scores.get("overall"), dict) else {}
+    sleep_score = _to_int(
+        overall.get("value")
+        or sleep_scores.get("overallScore")
+        or dto.get("sleepScoresOverall")
+        or dto.get("sleepScore")
+    )
+
     return {
         "day": iso_date,
         "steps": _first_int(stats.get("totalSteps") if stats else None),
         "resting_hr": _extract_resting_hr(rhr)
         or _first_int(stats.get("restingHeartRate") if stats else None),
         "sleep_seconds": _to_int(dto.get("sleepTimeSeconds")),
-        "sleep_score": _to_int(
-            dto.get("sleepScoresOverall") or dto.get("sleepScore")
-        ),
+        "sleep_score": sleep_score,
         "deep_sleep_seconds": _to_int(dto.get("deepSleepSeconds")),
         "rem_sleep_seconds": _to_int(dto.get("remSleepSeconds")),
+        "light_sleep_seconds": _to_int(dto.get("lightSleepSeconds")),
+        "awake_count": _to_int(dto.get("awakeCount")),
+        "avg_sleep_stress": _to_int(dto.get("avgSleepStress")),
+        "respiration_avg": _to_int(dto.get("averageRespirationValue")),
         "stress_avg": _extract_stress(stress),
+        "stress_max": _to_int(stress.get("maxStressLevel")) if isinstance(stress, dict) else None,
         "body_battery_high": bb_high,
         "body_battery_low": bb_low,
         "hrv_avg": _extract_hrv(hrv),
+        "hrv_status": _extract_hrv_status(hrv),
         "training_readiness": _extract_training_readiness(tr),
         "intensity_minutes": intensity,
+        "floors_climbed": _first_int(
+            stats.get("floorsAscended") if stats else None
+        ),
         "active_kcal": _first_int(
             stats.get("activeKilocalories") if stats else None
         ),
